@@ -32,6 +32,11 @@ import (
 	"github.com/magefile/mage/sh"
 )
 
+type Tests struct {
+	Name  string
+	Files []string
+}
+
 const (
 	baseHiveDockerPath = "./e2e/hive/"
 )
@@ -39,9 +44,11 @@ const (
 var (
 	// Variables.
 	hiveClone      = os.Getenv("GOPATH") + "/src/"
-	clonePath      = hiveClone + ".hive-e2e"
-	simulatorsPath = clonePath + "/simulators/polaris"
-	clientsPath    = clonePath + "/clients/polard"
+	clonePath      = hiveClone + ".hive-e2e/"
+	simulatorsPath = clonePath + "simulators/polaris/"
+	clientsPath    = clonePath + "clients/polard/"
+
+	simulations = []Tests{{"rpc", []string{"init/genesis.json"}}, {"rpc-compat", []string{}}, {"graphql", []string{"testcases"}}}
 )
 
 type Hive mg.Namespace
@@ -75,11 +82,21 @@ func (h Hive) Setup() error {
 	}
 
 	LogGreen("Copying Polaris Hive setup files...")
+	if err := sh.RunV("mkdir", simulatorsPath); err != nil {
+		return err
+	}
 	if err := sh.RunV("cp", "-rf", baseHiveDockerPath+"clients/polard", clientsPath); err != nil {
 		return err
 	}
-	if err := sh.RunV("cp", "-rf", "./e2e/hive/simulators", simulatorsPath); err != nil {
-		return err
+	for _, sim := range simulations {
+		if err := sh.RunV("cp", "-rf", clonePath+"simulators/ethereum/"+sim.Name, simulatorsPath+sim.Name); err != nil {
+			return err
+		}
+		for _, file := range sim.Files {
+			if err := sh.RunV("cp", "-rf", baseHiveDockerPath+"simulators/"+sim.Name+"/"+file, simulatorsPath+sim.Name+"/"+file); err != nil {
+				return err
+			}
+		}
 	}
 
 	return ExecuteInDirectory(clonePath, func(...string) error {
